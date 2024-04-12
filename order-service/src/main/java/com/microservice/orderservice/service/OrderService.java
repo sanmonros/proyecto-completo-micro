@@ -1,6 +1,6 @@
 package com.microservice.orderservice.service;
 
-import com.microservice.orderservice.config.WebClientConfig;
+
 import com.microservice.orderservice.dto.InventoryResponse;
 import com.microservice.orderservice.dto.OrderLineItemsDto;
 import com.microservice.orderservice.dto.OrderRequest;
@@ -19,14 +19,15 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class OrderService {
 
     @Autowired
     private OrderRepository orderRepository;
 
-    private final WebClient webClient;
+    private final WebClient.Builder webClientBuilder;
 
-    public void placeOrder(OrderRequest orderRequest){
+    public String placeOrder(OrderRequest orderRequest){
         Order order = new Order();
         order.setOrderNumber(UUID.randomUUID().toString());
 
@@ -42,7 +43,7 @@ public class OrderService {
                 .map(OrderLineItems::getSkuCode).toList();
 
         //Call inventory service and place order if product is in stock
-        InventoryResponse[] inventoryResponsesArray = webClient
+        InventoryResponse[] inventoryResponsesArray = webClientBuilder.build()
                 .get()
                 .uri("http://localhost:8082/api/inventory",uriBuilder ->
                         uriBuilder.queryParam("skuCode",skuCodes).build() )
@@ -54,8 +55,9 @@ public class OrderService {
         boolean allProductsInStock = Arrays.stream(inventoryResponsesArray)
                 .allMatch(InventoryResponse::getIsInStock);
 
-        if(Boolean.TRUE.equals(allProductsInStock)){
+        if(allProductsInStock){
             orderRepository.save(order);
+            return "Order Placed Succesfully";
         } else{
             throw new IllegalArgumentException("Product is not in stock, please try again later");
         }
